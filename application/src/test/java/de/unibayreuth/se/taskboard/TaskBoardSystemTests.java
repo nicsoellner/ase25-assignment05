@@ -1,13 +1,18 @@
 package de.unibayreuth.se.taskboard;
 
 import de.unibayreuth.se.taskboard.api.dtos.TaskDto;
+import de.unibayreuth.se.taskboard.api.dtos.UserDto;
 import de.unibayreuth.se.taskboard.api.mapper.TaskDtoMapper;
+import de.unibayreuth.se.taskboard.api.mapper.UserDtoMapper;
 import de.unibayreuth.se.taskboard.business.domain.Task;
+import de.unibayreuth.se.taskboard.business.domain.User;
 import io.restassured.http.ContentType;
+import io.restassured.response.Response;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
+import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static io.restassured.RestAssured.when;
@@ -15,10 +20,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 
 
+
 public class TaskBoardSystemTests extends AbstractSystemTest {
 
     @Autowired
-    private TaskDtoMapper taskDtoMapper;
+    protected TaskDtoMapper taskDtoMapper;
+
+    @Autowired
+    protected UserDtoMapper userDtoMapper;
 
     @Test
     void getAllCreatedTasks() {
@@ -65,5 +74,47 @@ public class TaskBoardSystemTests extends AbstractSystemTest {
 
     }
 
-    //TODO: Add at least one test for each new endpoint in the users controller (the create endpoint can be tested as part of the other endpoints).
+    @Test
+    void getAllCreatedUsers() {
+        List<User> createdUser = TestFixtures.createUsers(userService);
+
+        List<User> retrievedUsers = given()
+                .contentType(ContentType.JSON)
+                .when()
+                .get("/api/users")
+                .then()
+                .statusCode(200)
+                .body(".", hasSize(createdUser.size()))
+                .and()
+                .extract().jsonPath().getList("$", UserDto.class)
+                .stream()
+                .map(userDtoMapper::toBusiness)
+                .toList();
+
+        assertThat(retrievedUsers)
+                .usingRecursiveFieldByFieldElementComparatorIgnoringFields("createdAt")
+                .containsExactlyInAnyOrderElementsOf(createdUser);
+    }
+
+    @Test
+    void createAndGetUserById() {
+        User user = TestFixtures.getUsers().getFirst();
+
+        Response response =
+                given().contentType(ContentType.JSON) // Set Content-Type as JSON
+                        .body("{\"name\": \"Susanne\"}")
+                        .when()
+                        .post("/api/users")
+                        .then()
+                        .statusCode(200)
+                        .extract().response();
+        UUID id = response.jsonPath().getUUID("id");
+
+        when()
+                .get("/api/users/{id}", id)
+                .then()
+                .statusCode(200);
+
+    }
+
 }
